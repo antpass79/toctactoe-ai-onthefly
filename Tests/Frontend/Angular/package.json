@@ -1,0 +1,31 @@
+{
+  "name": "tictactoe-frontend-angular-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@analogjs/vite-plugin-angular": "^1.14.1",
+    "@analogjs/vitest-angular": "^1.14.1",
+    "@angular/build": "^19.0.0",
+    "@angular/common": "^19.0.0",
+    "@angular/compiler": "^19.0.0",
+    "@angular/compiler-cli": "^19.2.21",
+    "@angular/core": "^19.0.0",
+    "@angular/platform-browser": "^19.0.0",
+    "@angular/platform-browser-dynamic": "^19.0.0",
+    "@testing-library/angular": "^17.3.7",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/user-event": "^14.6.1",
+    "happy-dom": "^20.9.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.6.0",
+    "typescript": "~5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "zone.js": "~0.15.0",
+    "zustand": "^5.0.0"
+  }
+}

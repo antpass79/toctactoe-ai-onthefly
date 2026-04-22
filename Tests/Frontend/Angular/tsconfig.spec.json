@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/spec",
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@src/*": ["../../../frontend/Angular/src/*"]
+    }
+  },
+  "include": ["**/*.spec.ts", "setup.ts", "vitest.config.ts"]
+}
