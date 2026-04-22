@@ -480,8 +480,9 @@ When the user writes **`Command: run`**, the agent must:
 
 1. Implement the full game **in memory** following this analysis document (Phases 1–5).
 2. Create all backend and frontend source files, tests, and Docker artifacts.
-3. Build and run both the backend (`dotnet run`) and the frontend (`npm run dev`).
-4. Output **only the artifacts and results** — no code snippets in chat, only confirmation of running services.
+3. **Run the full test suite (backend and frontend). All tests MUST pass before proceeding.** The game is not considered ready to use until every test passes successfully.
+4. Build and run both the backend (`dotnet run`) and the frontend (`npm run dev`).
+5. Output **only the artifacts and results** — no code snippets in chat, only confirmation of running services.
 
 ### `Command: stop`
 
@@ -489,4 +490,4 @@ When the user writes **`Command: stop`**, the agent must:
 
 1. Stop any running backend and frontend processes.
 2. **Delete all folders** created during the `run` command (`backend/`, `frontend/`, and any root-level generated files such as `docker-compose.yml`, `.env`, `.gitignore`, `nginx.conf`).
-3. Preserve only this `ANALYSIS.md` file.
+3. **NEVER delete the `Tests/` folder.** Preserve this `ANALYSIS.md` file and the `Tests/` folder.

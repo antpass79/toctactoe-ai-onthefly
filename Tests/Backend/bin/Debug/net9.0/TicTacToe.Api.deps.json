@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "TicTacToe.Api/1.0.0": {
+        "runtime": {
+          "TicTacToe.Api.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TicTacToe.Api/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
