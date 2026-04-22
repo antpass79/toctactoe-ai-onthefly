@@ -1,14 +1,28 @@
 # Tic Tac Toe AI — Deep Analysis & Implementation Plan
 
+**PLACEHOLDERS**
+
+UI_LANGUAGE = Last version of Typescript
+
+UI_LIBRARY = Last version of MUI
+
+UI_FRAMEWORK = Last version of Angular
+
+UI_STATE_MANAGER = Last version of Zustand
+
+BACKEND_FRAMEWORK = Last version of Python
+
+LLM_MODEL = Azure OpenAI GPT-4o
+
 ## 1. Project Overview
 
 A web-based Tic Tac Toe game where a human player competes against an AI opponent powered by Azure OpenAI (GPT-4o). The solution is composed of:
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| Frontend | React 18 + TypeScript + MUI 5 | Game UI, board rendering, user interaction |
-| Backend | ASP.NET Core 8 Web API | Game logic orchestration, AI integration, REST API |
-| AI | Azure OpenAI GPT-4o | Opponent move generation |
+| Frontend | UI_LANGUAGE + UI_LIBRARY + UI_FRAMEWORK + UI_STATE_MANAGER | Game UI, board rendering, user interaction |
+| Backend | BACKEND_FRAMEWORK | Game logic orchestration, AI integration, REST API |
+| AI | LLM_MODEL | Opponent move generation |
 | Testing | xUnit (backend) + Vitest (frontend) | Unit & integration tests |
 | Infrastructure | Docker / Docker Compose | Containerized deployment (Rancher Desktop / Azure Container Apps) |
 
@@ -18,25 +32,24 @@ A web-based Tic Tac Toe game where a human player competes against an AI opponen
 
 ```
 ┌─────────────────────────────┐
-│       React Frontend        │
+│         Frontend            │
 │  (MUI components, Vite)     │
-│  http://localhost:5173       │
+│  http://localhost:5173      │
 └──────────┬──────────────────┘
            │  REST API (JSON)
            ▼
 ┌─────────────────────────────┐
-│   ASP.NET Core 8 Web API    │
-│   http://localhost:5000      │
+│           Backend           │
+│   http://localhost:5000     │
 │                             │
-│  ┌───────────┐ ┌──────────┐│
-│  │ GameEngine│ │ AIService││
-│  └───────────┘ └─────┬────┘│
+│  ┌───────────┐ ┌──────────┐ │
+│  │ GameEngine│ │ AIService│ │
+│  └───────────┘ └─────┬────┘ │
 └──────────────────────┼──────┘
                        │  HTTPS (Azure OpenAI SDK)
                        ▼
               ┌────────────────┐
-              │ Azure OpenAI   │
-              │ GPT-4o         │
+              │ LLM_MODEL      │
               └────────────────┘
 ```
 
@@ -120,7 +133,7 @@ tictactoe-ai-pipeline/
 
 ## 4. Detailed Component Design
 
-### 4.1 Backend — ASP.NET Core 8 Web API
+### 4.1 Backend
 
 #### 4.1.1 Models
 
@@ -208,7 +221,7 @@ Respond with ONLY a single integer representing your chosen position.
 
 ---
 
-### 4.2 Frontend — React + TypeScript + MUI
+### 4.2 Frontend
 
 #### 4.2.1 Component Tree
 
@@ -224,9 +237,9 @@ App
 │       └── NewGameButton
 ```
 
-#### 4.2.2 MUI Components Used
+#### 4.2.2 UI_STATE_MANAGER Components Used
 
-| Component | MUI Element | Notes |
+| Component | UI_STATE_MANAGER Element | Notes |
 |-----------|-------------|-------|
 | Board | `Grid` (container + items) | 3×3 responsive grid |
 | Cell | `Paper` + `ButtonBase` | Elevation, hover effect, click handler |
@@ -290,7 +303,7 @@ Flow inside `makeMove`:
 - Non-integer response → retries.
 - All retries fail → falls back to random valid cell.
 
-#### 4.3.2 Frontend Tests (Vitest + React Testing Library)
+#### 4.3.2 Frontend Tests (Vitest + UI_FRAMEWORK Testing Library)
 
 | Test File | What It Tests |
 |-----------|--------------|
@@ -411,8 +424,8 @@ Frontend accessible at `http://localhost:8080`, backend API at `http://localhost
 
 | Step | Task | Output |
 |------|------|--------|
-| 3.1 | Scaffold React + Vite + TypeScript project | Project setup |
-| 3.2 | Install and configure MUI, create custom theme | Themed app |
+| 3.1 | Scaffold UI_FRAMEWORK + Vite + TypeScript project | Project setup |
+| 3.2 | Install and configure UI_LIBRARY + UI_STATE_MANAGER, create custom theme | Themed app |
 | 3.3 | Build `Cell`, `Board` components | Visual board |
 | 3.4 | Build `GameStatus`, `ScoreBoard`, `NewGameButton` | Complete UI |
 | 3.5 | Implement `useGame` hook + `gameApi` client | Working game |

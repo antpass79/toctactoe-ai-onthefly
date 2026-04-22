@@ -1,0 +1,22 @@
+# Whitelist approach: ignore everything, then explicitly allow what should be tracked.
+/*
+/**
+
+# Allow this .gitignore itself
+!/.gitignore
+
+# Allow the analysis document
+!/ANALYSIS.md
+
+# Allow the Tests folder and all its contents
+!/Tests
+!/Tests/**
+
+# But exclude build/dependency artifacts inside Tests
+Tests/**/bin/
+Tests/**/obj/
+Tests/**/node_modules/
+Tests/**/dist/
+Tests/**/coverage/
+Tests/**/.vite/
+Tests/Frontend/package-lock.json
