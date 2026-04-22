@@ -52,8 +52,6 @@ This is the **only** section of this document that names concrete technologies, 
 | `ENV_LLM_ENDPOINT` | `AZURE_OPENAI_URL` |
 | `ENV_LLM_KEY` | `AZURE_OPENAI_KEY` |
 | `ENV_LLM_MODEL` | `AZURE_OPENAI_MODEL` |
-| `LLM_ENDPOINT_EXAMPLE` | `https://ent-poc-openai-gpt4-o.openai.azure.com` |
-| `LLM_DEPLOYMENT_EXAMPLE` | `ENT-POC-OpenAI-GPT4-O` |
 
 ### Infrastructure
 
@@ -443,9 +441,9 @@ services:
 
 ```bash
 # Create .env file with secrets (git-ignored)
-echo "ENV_LLM_ENDPOINT=LLM_ENDPOINT_EXAMPLE" > .env
+echo "ENV_LLM_ENDPOINT=<your-endpoint>" > .env
 echo "ENV_LLM_KEY=<your-key>" >> .env
-echo "ENV_LLM_MODEL=LLM_DEPLOYMENT_EXAMPLE" >> .env
+echo "ENV_LLM_MODEL=<your-deployment>" >> .env
 
 <CONTAINER_ORCHESTRATOR_LOCAL up --build>
 ```
