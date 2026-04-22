@@ -11,14 +11,13 @@ This is the **only** section of this document that names concrete technologies, 
 | Placeholder | Value |
 |-------------|-------|
 | `UI_LANGUAGE` | Latest stable version of **TypeScript** |
-| `UI_FRAMEWORK` | Latest stable version of **Angular** |
+| `UI_FRAMEWORK` | Latest stable version of **React** |
 | `UI_LIBRARY` | Latest stable version of **MUI (Material UI)** |
 | `UI_STATE_MANAGER` | Latest stable version of **Zustand** |
-| `FRONTEND_TEST_FRAMEWORK` | Latest stable version of **Vitest** + **Angular Testing Library** |
 | `FRONTEND_PACKAGE_MANAGER` | Latest stable version of **npm** |
-| `FRONTEND_BUILD_TOOL` | **Angular CLI** (latest stable) |
-| `FRONTEND_DEV_SERVER` | **Angular CLI dev server** (`ng serve`) |
-| `FRONTEND_HTTP_CLIENT` | **Angular `HttpClient`** |
+| `FRONTEND_BUILD_TOOL` | **React CLI** (latest stable) |
+| `FRONTEND_DEV_SERVER` | **React CLI dev server** (`ng serve`) |
+| `FRONTEND_HTTP_CLIENT` | **React `HttpClient`** |
 | `FRONTEND_DEV_PORT` | `4200` |
 | `FRONTEND_PUBLIC_PORT` | `8080` |
 | `FRONTEND_WEB_SERVER_IMAGE` | `nginx:alpine` |
@@ -34,8 +33,7 @@ This is the **only** section of this document that names concrete technologies, 
 | `BACKEND_VALIDATION_LIB` | Latest stable version of **Pydantic** |
 | `BACKEND_SETTINGS_LIB` | Latest stable version of **pydantic-settings** |
 | `BACKEND_RATE_LIMIT_LIB` | Latest stable version of **slowapi** |
-| `BACKEND_TEST_FRAMEWORK` | Latest stable version of **pytest** |
-| `BACKEND_HTTP_TEST_LIB` | Latest stable version of **httpx** + FastAPI `TestClient` |
+FastAPI `TestClient` |
 | `BACKEND_PACKAGE_MANAGER` | Latest stable version of **pip** (with `pyproject.toml`) |
 | `BACKEND_BASE_IMAGE` | `python:3.12-slim` |
 | `BACKEND_PORT` | `5000` |
@@ -73,7 +71,6 @@ A web-based Tic Tac Toe game where a human player competes against an AI opponen
 | Frontend | `UI_LANGUAGE` + `UI_FRAMEWORK` + `UI_LIBRARY` + `UI_STATE_MANAGER` | Game UI, board rendering, user interaction |
 | Backend | `BACKEND_LANGUAGE` + `BACKEND_FRAMEWORK` | Game logic orchestration, AI integration, REST API |
 | AI | `LLM_MODEL` | Opponent move generation |
-| Testing | `BACKEND_TEST_FRAMEWORK` (backend) + `FRONTEND_TEST_FRAMEWORK` (frontend) | Unit & integration tests |
 | Infrastructure | `CONTAINER_RUNTIME` / `CONTAINER_ORCHESTRATOR_LOCAL` | Containerized deployment (local `CONTAINER_RUNTIME` / `CONTAINER_ORCHESTRATOR_CLOUD`) |
 
 ---
@@ -229,7 +226,7 @@ Responsibilities:
 - Check win condition (8 winning lines).
 - Check draw condition (all cells filled, no winner).
 
-This service contains **zero AI logic** and is fully deterministic → easy to unit test with `BACKEND_TEST_FRAMEWORK`.
+This service contains **zero AI logic** and is fully deterministic → easy to unit test.
 
 #### 4.1.3 AiPlayerService
 
@@ -367,13 +364,13 @@ Flow inside `makeMove`:
 
 ### 4.3 Unit Tests
 
-#### 4.3.1 Backend Tests (`BACKEND_TEST_FRAMEWORK`)
+#### 4.3.1 Backend Tests
 
 | Test Module | What It Tests |
 |-------------|--------------|
 | `test_game_engine` | Move validation, win detection (all 8 lines), draw detection, invalid move rejection |
 | `test_ai_player_service` | Prompt construction, response parsing, retry on invalid response, fallback behavior (`LLM_SDK` mocked) |
-| `test_game_router` | `BACKEND_FRAMEWORK` endpoint integration tests using `BACKEND_HTTP_TEST_LIB` |
+| `test_game_router` | `BACKEND_FRAMEWORK` endpoint integration tests |
 
 **`GameEngine` scenarios:**
 - Placing a move on an empty cell succeeds.
@@ -388,7 +385,7 @@ Flow inside `makeMove`:
 - Non-integer response → retries.
 - All retries fail → falls back to random valid cell.
 
-#### 4.3.2 Frontend Tests (`FRONTEND_TEST_FRAMEWORK`)
+#### 4.3.2 Frontend Tests 
 
 | Test File | What It Tests |
 |-----------|--------------|
@@ -499,7 +496,7 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 |------|------|--------|
 | 1.1 | Create `BACKEND_FRAMEWORK` project, add `BACKEND_VALIDATION_LIB` models | Project scaffolding |
 | 1.2 | Implement `GameEngine` (move, validate, win/draw check) | `GameEngine` module |
-| 1.3 | Write `GameEngine` tests with `BACKEND_TEST_FRAMEWORK` | Full test coverage of game logic |
+| 1.3 | Write `GameEngine` tests | Full test coverage of game logic |
 | 1.4 | Create game router with `/new` and `/move` (mock AI with random) | Working API |
 
 ### Phase 2 — AI Integration
@@ -520,7 +517,6 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 | 3.3 | Build `cell`, `board` components | Visual board |
 | 3.4 | Build `game-status`, `score-board`, `new-game-button` components | Complete UI |
 | 3.5 | Implement `UI_STATE_MANAGER` store + `GameApiService` (`FRONTEND_HTTP_CLIENT`) | Working game |
-| 3.6 | Write frontend tests with `FRONTEND_TEST_FRAMEWORK` | Test coverage |
 
 ### Phase 4 — Docker & Integration
 
@@ -599,7 +595,7 @@ When the user writes **`Command: run`**, the agent must:
 
 1. Implement the full game **in memory** following this analysis document (Phases 1–5) using the exact technologies defined in the **PLACEHOLDERS** section.
 2. Create all backend and frontend source files, tests, and Docker artifacts.
-3. **Run the full test suite (`BACKEND_TEST_FRAMEWORK` for the backend and `FRONTEND_TEST_FRAMEWORK` for the frontend). All tests MUST pass before proceeding.** The game is not considered ready to use until every test passes successfully.
+3. **Run the full test suite inside Tests folder based on the current stack. All tests MUST pass before proceeding.** The game is not considered ready to use until every test passes successfully.
 4. Build and run both the backend (via `BACKEND_RUNTIME_SERVER` on `BACKEND_PORT`) and the frontend (via `FRONTEND_DEV_SERVER` on `FRONTEND_DEV_PORT`).
 5. Output **only the artifacts and results** — no code snippets in chat, only confirmation of running services.
 
