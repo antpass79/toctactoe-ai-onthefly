@@ -22,3 +22,7 @@ Tests/**/.vite/
 Tests/**/playwright-report/
 Tests/**/test-results/
 Tests/Frontend/package-lock.json
+
+# Never commit local secrets (redundant with whitelist, kept explicit for safety)
+secrets.json
+**/secrets.json

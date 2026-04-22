@@ -123,6 +123,8 @@ tictactoe-ai-pipeline/
 │
 ├── ANALYSIS.md                          # This document
 ├── docker-compose.yml                   # Orchestration (CONTAINER_ORCHESTRATOR_LOCAL)
+├── secrets.json                         # Local LLM settings (git-ignored, docker-ignored)
+├── secrets.example.json                 # Committed template with empty values
 │
 ├── backend/                             # BACKEND_LANGUAGE / BACKEND_FRAMEWORK
 │   ├── BACKEND_MANIFEST_FILE            # BACKEND_PACKAGE_MANAGER manifest
@@ -251,24 +253,36 @@ Available positions: [1, 3, 5, 6, 7, 8]
 Respond with ONLY a single integer representing your chosen position.
 ```
 
-**`LLM_MODEL` configuration** (loaded through `BACKEND_SETTINGS_LIB` from environment variables / secrets):
+**`LLM_MODEL` configuration** is loaded through `BACKEND_SETTINGS_LIB` from a local secrets file `secrets.json` at the repository root. The file is **git-ignored** and **docker-ignored**; only `secrets.example.json` (with empty placeholder values) is committed.
 
-| Purpose | Environment variable |
-|---------|----------------------|
+**`secrets.json` shape:**
+
+```json
+{
+  "ENV_LLM_ENDPOINT": "<your-endpoint>",
+  "ENV_LLM_KEY": "<your-key>",
+  "ENV_LLM_MODEL": "<your-deployment>"
+}
+```
+
+| Purpose | Key in `secrets.json` |
+|---------|-----------------------|
 | Endpoint URL | `ENV_LLM_ENDPOINT` |
 | API Key (⚠ never in source control) | `ENV_LLM_KEY` |
 | Deployment name | `ENV_LLM_MODEL` |
 
+At container start, `secrets.json` is mounted read-only into the backend container (e.g. `/run/secrets/secrets.json`) via `CONTAINER_ORCHESTRATOR_LOCAL` bind mount or secret mechanism. `BACKEND_SETTINGS_LIB` reads it once at startup and then keeps the values in memory as secret-typed fields.
+
 **API key protection requirements** (enforced by the backend):
 
-- The key is loaded **only** from environment variables / container secrets via `BACKEND_SETTINGS_LIB` — never from source files, query strings, request bodies, or client-provided headers.
+- The key is loaded **only** from `secrets.json` via `BACKEND_SETTINGS_LIB` — never from source files, query strings, request bodies, or client-provided headers.
 - The key is typed as a **secret value** (e.g. `BACKEND_SETTINGS_LIB`'s `SecretStr` equivalent) so it is not serialised by default in logs, exception messages, debug output, or API responses.
 - The key is **never** returned by any endpoint, echoed in error messages, or included in health/metrics responses.
 - Logging is configured to redact or omit the `ENV_LLM_KEY` value (and any `Authorization` / `api-key` headers sent to `LLM_MODEL`).
 - The key is **never** forwarded to the frontend; only server-side code holds it in memory.
-- `.env`, `.env.*` (except `.env.example`), and any local secrets file are listed in `.gitignore` and `.dockerignore` so they are neither committed nor copied into images.
-- `.env.example` is committed with empty values only, to document the required variable names without leaking secrets.
-- In production (`CONTAINER_ORCHESTRATOR_CLOUD`) the key is provisioned as a platform secret (Container Apps secret / Key Vault reference) and injected as `ENV_LLM_KEY` at runtime — not baked into the image.
+- `secrets.json` (and any other local secrets file) is listed in `.gitignore` and `.dockerignore` so it is neither committed nor copied into images. It is mounted into the container at runtime, not baked in.
+- `secrets.example.json` is committed with empty values only, to document the required keys without leaking secrets.
+- In production (`CONTAINER_ORCHESTRATOR_CLOUD`) the same `secrets.json` contract is provided by mounting a platform secret (Container Apps secret / Key Vault reference) at the same path — not baked into the image.
 - CORS restricts callers to the frontend origin so third-party sites cannot reach endpoints that would trigger `LLM_MODEL` calls on their behalf.
 - `BACKEND_RATE_LIMIT_LIB` protects the AI-calling endpoints from abuse that would consume the key's quota.
 
@@ -435,10 +449,8 @@ services:
       dockerfile: backend/Dockerfile
     ports:
       - "BACKEND_PORT:BACKEND_PORT"
-    environment:
-      - ENV_LLM_ENDPOINT=${ENV_LLM_ENDPOINT}
-      - ENV_LLM_KEY=${ENV_LLM_KEY}
-      - ENV_LLM_MODEL=${ENV_LLM_MODEL}
+    volumes:
+      - ./secrets.json:/run/secrets/secrets.json:ro
 
   frontend:
     build:
@@ -450,13 +462,19 @@ services:
       - backend
 ```
 
+The backend reads `/run/secrets/secrets.json` at startup via `BACKEND_SETTINGS_LIB`. The file is never copied into the image (it is excluded by `.dockerignore`) — only mounted from the host at runtime.
+
 ### 5.4 Running Locally (`CONTAINER_RUNTIME`)
 
 ```bash
-# Create .env file with secrets (git-ignored)
-echo "ENV_LLM_ENDPOINT=<your-endpoint>" > .env
-echo "ENV_LLM_KEY=<your-key>" >> .env
-echo "ENV_LLM_MODEL=<your-deployment>" >> .env
+# Create secrets.json at the repo root (git-ignored, docker-ignored)
+cat > secrets.json <<'EOF'
+{
+  "ENV_LLM_ENDPOINT": "<your-endpoint>",
+  "ENV_LLM_KEY": "<your-key>",
+  "ENV_LLM_MODEL": "<your-deployment>"
+}
+EOF
 
 <CONTAINER_ORCHESTRATOR_LOCAL up --build>
 ```
@@ -469,7 +487,7 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 2. Create a `CONTAINER_ORCHESTRATOR_CLOUD` environment.
 3. Deploy backend as internal container app (ingress: internal).
 4. Deploy frontend as external container app (ingress: external).
-5. Store API key in `CONTAINER_ORCHESTRATOR_CLOUD` secrets, map to env var `ENV_LLM_KEY`.
+5. Store API key (and the other LLM settings) as `CONTAINER_ORCHESTRATOR_CLOUD` secrets and mount them as `secrets.json` at the same path (`/run/secrets/secrets.json`) the backend expects.
 
 ---
 
@@ -511,7 +529,7 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 | 4.1 | Create backend Dockerfile, test build & run | Containerized API |
 | 4.2 | Create frontend Dockerfile + nginx.conf, test build & run | Containerized UI |
 | 4.3 | Create docker-compose.yml, test full stack | Working system |
-| 4.4 | Add `.env.example`, `.dockerignore`, `.gitignore` | Clean repo |
+| 4.4 | Add `secrets.example.json`, `.dockerignore`, `.gitignore` (both excluding `secrets.json`) | Clean repo |
 
 ### Phase 5 — Polish & Hardening
 
@@ -559,12 +577,12 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 ## 9. Security Notes
 
 - **API Key Management**: The `LLM_MODEL` key is treated as a high-sensitivity secret. It is:
-  - Stored only as an environment variable (`ENV_LLM_KEY`) or platform secret (`CONTAINER_ORCHESTRATOR_CLOUD` secret / Key Vault reference) — never in source, configuration files, or container images.
+  - Stored only in a local `secrets.json` (git-ignored, docker-ignored) or, in production, as a `CONTAINER_ORCHESTRATOR_CLOUD` secret / Key Vault reference mounted at the same path — never in source, tracked configuration, or container images.
   - Loaded through `BACKEND_SETTINGS_LIB` as a secret-typed value so it is not serialised in logs, exceptions, or API responses.
   - Redacted from application logs and from any outbound diagnostic output.
   - Held exclusively server-side; the frontend never receives or references it.
-  - Excluded from version control and from container build context via `.gitignore` and `.dockerignore` (covering `.env` and any local secret files). Only `.env.example`, containing empty placeholders, is committed.
-  - Rotated via the environment / secret store without requiring a code change or rebuild.
+  - Excluded from version control and from container build context via `.gitignore` and `.dockerignore` (covering `secrets.json` and any other local secret files). Only `secrets.example.json`, containing empty placeholders, is committed.
+  - Rotated by updating `secrets.json` (or the platform secret) and restarting the backend — no code change or rebuild required.
 - **CORS**: Backend allows requests only from the frontend origin (`http://localhost:FRONTEND_PUBLIC_PORT` in development). This prevents third-party origins from driving calls that would consume the key's quota.
 - **Rate Limiting**: AI-calling endpoints are protected by `BACKEND_RATE_LIMIT_LIB` to limit abuse and unexpected cost.
 - **Input Validation**: All incoming requests are validated by `BACKEND_VALIDATION_LIB` (board length, position range, cell content values) so untrusted input cannot reach the AI call path in an unexpected shape.
@@ -590,5 +608,5 @@ When the user writes **`Command: run`**, the agent must:
 When the user writes **`Command: stop`**, the agent must:
 
 1. Stop any running backend and frontend processes.
-2. **Delete all folders** created during the `run` command (`backend/`, `frontend/`, and any root-level generated files such as `docker-compose.yml`, `.env`, `.gitignore`, `nginx.conf`).
+2. **Delete all folders** created during the `run` command (`backend/`, `frontend/`, and any root-level generated files such as `docker-compose.yml`, `secrets.json`, `secrets.example.json`, `.gitignore`, `.dockerignore`, `nginx.conf`).
 3. **NEVER delete the `Tests/` folder.** Preserve this `ANALYSIS.md` file and the `Tests/` folder.
