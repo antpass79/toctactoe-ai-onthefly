@@ -259,6 +259,19 @@ Respond with ONLY a single integer representing your chosen position.
 | API Key (⚠ never in source control) | `ENV_LLM_KEY` |
 | Deployment name | `ENV_LLM_MODEL` |
 
+**API key protection requirements** (enforced by the backend):
+
+- The key is loaded **only** from environment variables / container secrets via `BACKEND_SETTINGS_LIB` — never from source files, query strings, request bodies, or client-provided headers.
+- The key is typed as a **secret value** (e.g. `BACKEND_SETTINGS_LIB`'s `SecretStr` equivalent) so it is not serialised by default in logs, exception messages, debug output, or API responses.
+- The key is **never** returned by any endpoint, echoed in error messages, or included in health/metrics responses.
+- Logging is configured to redact or omit the `ENV_LLM_KEY` value (and any `Authorization` / `api-key` headers sent to `LLM_MODEL`).
+- The key is **never** forwarded to the frontend; only server-side code holds it in memory.
+- `.env`, `.env.*` (except `.env.example`), and any local secrets file are listed in `.gitignore` and `.dockerignore` so they are neither committed nor copied into images.
+- `.env.example` is committed with empty values only, to document the required variable names without leaking secrets.
+- In production (`CONTAINER_ORCHESTRATOR_CLOUD`) the key is provisioned as a platform secret (Container Apps secret / Key Vault reference) and injected as `ENV_LLM_KEY` at runtime — not baked into the image.
+- CORS restricts callers to the frontend origin so third-party sites cannot reach endpoints that would trigger `LLM_MODEL` calls on their behalf.
+- `BACKEND_RATE_LIMIT_LIB` protects the AI-calling endpoints from abuse that would consume the key's quota.
+
 #### 4.1.4 GameController (`BACKEND_FRAMEWORK` router)
 
 | Endpoint | Method | Description |
@@ -545,9 +558,17 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 
 ## 9. Security Notes
 
-- **API Key Management**: The `LLM_MODEL` key must be stored as an environment variable (`ENV_LLM_KEY`) or container secret. Configuration files contain placeholder values only. The `.env` file is git-ignored.
-- **CORS**: Backend allows requests only from the frontend origin (`http://localhost:FRONTEND_PUBLIC_PORT` in development).
-- **Input Validation**: All incoming requests are validated by `BACKEND_VALIDATION_LIB` (board length, position range, cell content values).
+- **API Key Management**: The `LLM_MODEL` key is treated as a high-sensitivity secret. It is:
+  - Stored only as an environment variable (`ENV_LLM_KEY`) or platform secret (`CONTAINER_ORCHESTRATOR_CLOUD` secret / Key Vault reference) — never in source, configuration files, or container images.
+  - Loaded through `BACKEND_SETTINGS_LIB` as a secret-typed value so it is not serialised in logs, exceptions, or API responses.
+  - Redacted from application logs and from any outbound diagnostic output.
+  - Held exclusively server-side; the frontend never receives or references it.
+  - Excluded from version control and from container build context via `.gitignore` and `.dockerignore` (covering `.env` and any local secret files). Only `.env.example`, containing empty placeholders, is committed.
+  - Rotated via the environment / secret store without requiring a code change or rebuild.
+- **CORS**: Backend allows requests only from the frontend origin (`http://localhost:FRONTEND_PUBLIC_PORT` in development). This prevents third-party origins from driving calls that would consume the key's quota.
+- **Rate Limiting**: AI-calling endpoints are protected by `BACKEND_RATE_LIMIT_LIB` to limit abuse and unexpected cost.
+- **Input Validation**: All incoming requests are validated by `BACKEND_VALIDATION_LIB` (board length, position range, cell content values) so untrusted input cannot reach the AI call path in an unexpected shape.
+- **Transport Security**: Calls from backend to `LLM_MODEL` use HTTPS via `LLM_SDK`; in production the frontend ↔ backend channel is served over HTTPS as well.
 - **No User Data Stored**: The application is stateless; no personal or medical data is processed.
 
 ---
