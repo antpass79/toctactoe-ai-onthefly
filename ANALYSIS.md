@@ -27,15 +27,14 @@ This is the **only** section of this document that names concrete technologies, 
 
 | Placeholder | Value |
 |-------------|-------|
-| `BACKEND_LANGUAGE` | Latest stable version of **Python** |
-| `BACKEND_FRAMEWORK` | Latest stable version of **FastAPI** |
-| `BACKEND_RUNTIME_SERVER` | Latest stable version of **Uvicorn** |
-| `BACKEND_VALIDATION_LIB` | Latest stable version of **Pydantic** |
-| `BACKEND_SETTINGS_LIB` | Latest stable version of **pydantic-settings** |
-| `BACKEND_RATE_LIMIT_LIB` | Latest stable version of **slowapi** |
-FastAPI `TestClient` |
-| `BACKEND_PACKAGE_MANAGER` | Latest stable version of **pip** (with `pyproject.toml`) |
-| `BACKEND_BASE_IMAGE` | `python:3.12-slim` |
+| `BACKEND_LANGUAGE` | Latest stable version of **C#** |
+| `BACKEND_FRAMEWORK` | Latest stable version of **AspNet Core** |
+| `BACKEND_RUNTIME_SERVER` |  |
+| `BACKEND_VALIDATION_LIB` |  |
+| `BACKEND_SETTINGS_LIB` |  |
+| `BACKEND_RATE_LIMIT_LIB` |  |
+| `BACKEND_PACKAGE_MANAGER` | Latest stable version of **nuget** (with `pyproject.toml`) |
+| `BACKEND_BASE_IMAGE` |  |
 | `BACKEND_PORT` | `5000` |
 | `BACKEND_MANIFEST_FILE` | Project manifest file name for `BACKEND_PACKAGE_MANAGER` |
 | `FRONTEND_MANIFEST_FILE` | Project manifest file name for `FRONTEND_PACKAGE_MANAGER` |
@@ -46,7 +45,7 @@ FastAPI `TestClient` |
 | Placeholder | Value |
 |-------------|-------|
 | `LLM_MODEL` | **Azure OpenAI GPT-4o** |
-| `LLM_SDK` | Latest stable version of the **`openai` Python SDK** (`AzureOpenAI` client) |
+| `LLM_SDK` |  |
 | `ENV_LLM_ENDPOINT` | `AZURE_OPENAI_URL` |
 | `ENV_LLM_KEY` | `AZURE_OPENAI_KEY` |
 | `ENV_LLM_MODEL` | `AZURE_OPENAI_MODEL` |
