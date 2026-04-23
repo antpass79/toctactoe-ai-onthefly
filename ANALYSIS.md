@@ -59,6 +59,27 @@ This is the **only** section of this document that names concrete technologies, 
 | `CONTAINER_ORCHESTRATOR_CLOUD` | **Azure Container Apps** |
 | `CONTAINER_REGISTRY` | **Azure Container Registry (ACR)** |
 
+### End-to-End (Playwright)
+
+Every placeholder in this subsection is stack-specific and exists so the
+Playwright suite under `Tests/E2E/Playwright/` stays stack-agnostic: the
+config and specs reference **only** these tokens (via environment variables
+at test time — see §4.4) and never hard-code a framework-specific command or
+selector.
+
+| Placeholder | Value |
+|-------------|-------|
+| `BACKEND_DIR` | Repo-relative backend directory for the active stack (e.g. `backend/AspNetCore`, `backend/Python`) |
+| `BACKEND_START_COMMAND` | Shell command that boots the backend on `BACKEND_PORT` from `BACKEND_DIR` (e.g. `dotnet run --urls http://127.0.0.1:BACKEND_PORT --no-launch-profile`, or `<venv python> -m uvicorn app.main:app --host 127.0.0.1 --port BACKEND_PORT`) |
+| `BACKEND_HEALTH_URL` | `http://127.0.0.1:BACKEND_PORT/health` |
+| `FRONTEND_DIR` | Repo-relative frontend directory for the active stack (e.g. `frontend/React`, `frontend/Angular`) |
+| `FRONTEND_START_COMMAND` | Shell command that boots `FRONTEND_DEV_SERVER` on `FRONTEND_DEV_PORT` from `FRONTEND_DIR` (e.g. `npm run dev`, `npx --no-install ng serve --host 127.0.0.1 --port FRONTEND_DEV_PORT`) |
+| `FRONTEND_URL` | `http://127.0.0.1:FRONTEND_DEV_PORT` |
+| `E2E_ROOT_SELECTOR` | Selector for the app root element (e.g. `#root` for React, `app-root` for Angular) |
+| `E2E_CELL_SELECTOR` | Selector that matches the 9 clickable cell buttons (e.g. `[data-testid="cell"]`, `app-cell button`) |
+| `E2E_HEADING_PATTERN` | Regex used to locate the main page heading (e.g. `/tic tac toe vs ai/i`) |
+| `BACKEND_AI_MOVE_FIELD` | JSON field name the backend uses in `MoveResponse` for the AI's chosen position. Must match on both sides of the contract (e.g. `aiMove` for `BACKEND_FRAMEWORK = AspNet Core`, `ai_move` for `BACKEND_FRAMEWORK = FastAPI`). The frontend API client normalises this into its own camelCase field. |
+
 ---
 
 ## 1. Project Overview
@@ -395,6 +416,89 @@ Flow inside `makeMove`:
 | `score-board.component` spec | Renders current score from store |
 | `game.store` spec | State transitions, API call on move, score updates |
 
+#### 4.3.3 End-to-End Tests (Playwright) — Stack-Agnostic
+
+The Playwright suite under `Tests/E2E/Playwright/` validates the **live**
+stack (real browser against the running frontend talking to the running
+backend). It must work for **any** combination of `BACKEND_FRAMEWORK` and
+`UI_FRAMEWORK` without code changes — only placeholder values change.
+
+**Abstraction contract.** The config and spec files reference only the
+placeholders from the *End-to-End (Playwright)* subsection above; they are
+resolved at test time from environment variables. Nothing inside the suite
+names a specific framework, tag, dev server, or language runtime.
+
+`playwright.config.ts` (abstract shape):
+
+```ts
+// Values sourced from env vars set by the agent from PLACEHOLDERS.
+const backendDir       = process.env.BACKEND_DIR!;
+const backendCommand   = process.env.BACKEND_START_COMMAND!;
+const backendHealthUrl = process.env.BACKEND_HEALTH_URL!;
+const frontendDir      = process.env.FRONTEND_DIR!;
+const frontendCommand  = process.env.FRONTEND_START_COMMAND!;
+const frontendUrl      = process.env.FRONTEND_URL!;
+
+export default defineConfig({
+  use: { baseURL: frontendUrl },
+  webServer: [
+    { command: backendCommand,  cwd: backendDir,  url: backendHealthUrl, reuseExistingServer: true },
+    { command: frontendCommand, cwd: frontendDir, url: frontendUrl,      reuseExistingServer: true },
+  ],
+  // ...
+});
+```
+
+`helpers.ts` (abstract shape):
+
+```ts
+const ROOT_SELECTOR = process.env.E2E_ROOT_SELECTOR!;
+const CELL_SELECTOR = process.env.E2E_CELL_SELECTOR!;
+
+export async function gotoApp(page: Page) {
+  await page.goto('/');
+  await expect(page.locator(ROOT_SELECTOR)).toBeVisible();
+  await expect(page.locator(CELL_SELECTOR)).toHaveCount(9);
+}
+export const cell = (page: Page, i: number) => page.locator(CELL_SELECTOR).nth(i);
+```
+
+**Selector contract for every `UI_FRAMEWORK`.** To keep `E2E_CELL_SELECTOR`
+uniform across stacks, every frontend implementation MUST tag its nine cell
+buttons with a stable, framework-neutral hook:
+
+- Each cell button: `data-testid="cell"` (and `role="button"` with an
+  accessible name including `X`, `O`, or "empty cell" — already required by
+  the unit tests).
+- Application root wrapper: `data-testid="app-root"` (or reuse the
+  framework's natural root — `#root` for `UI_FRAMEWORK = React`, `app-root`
+  for `UI_FRAMEWORK = Angular` — and set `E2E_ROOT_SELECTOR` accordingly).
+
+With this contract, the **default** values `E2E_CELL_SELECTOR = [data-testid="cell"]`
+and `E2E_ROOT_SELECTOR = [data-testid="app-root"]` work for any
+`UI_FRAMEWORK` without editing the suite.
+
+**Backend JSON contract.** The backend may serialise its response field as
+`aiMove` (C#/.NET defaults) or `ai_move` (Python/FastAPI defaults). Record
+the actual wire name in `BACKEND_AI_MOVE_FIELD` and ensure:
+
+- The mocked responses in `game-flow.spec.ts` use `BACKEND_AI_MOVE_FIELD` as
+  the key.
+- `FRONTEND_HTTP_CLIENT` / the frontend API client normalises both forms
+  into a single camelCase field the UI consumes, so the UI code never
+  depends on the wire name.
+
+**Coverage (identical to the current `smoke` + `game-flow` specs):**
+
+| Spec | What it asserts |
+|------|------------------|
+| `smoke.spec.ts` | Real stack: heading renders, `E2E_CELL_SELECTOR` matches 9 cells, clicking cell 0 triggers a real `POST /api/game/move` (200), an `O` appears, no CORS console errors. |
+| `game-flow.spec.ts` | Backend route-mocked (`page.route`): player win / AI win / draw messaging, score updates, new-game reset, "AI is thinking..." loading state. Mock payloads use `BACKEND_AI_MOVE_FIELD`. |
+
+**Phase 5 adds step 5.5:** wire the `Command: run` agent step to export the
+Playwright placeholder values as environment variables before invoking the
+suite, so switching stack = changing PLACEHOLDERS only.
+
 ---
 
 ## 5. Docker & Deployment
@@ -533,7 +637,9 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 | 5.1 | Configure `BACKEND_FRAMEWORK` CORS (restrict to frontend origin) | Security |
 | 5.2 | Add input validation via `BACKEND_VALIDATION_LIB` + global exception handlers | Robustness |
 | 5.3 | Add loading states and error handling in UI | UX |
-| 5.4 | Final end-to-end manual testing | Verified system |
+| 5.4 | Tag cells/root with `data-testid` hooks matching `E2E_CELL_SELECTOR` / `E2E_ROOT_SELECTOR` | Stable E2E contract |
+| 5.5 | Export Playwright placeholder values (`BACKEND_DIR`, `BACKEND_START_COMMAND`, `BACKEND_HEALTH_URL`, `FRONTEND_DIR`, `FRONTEND_START_COMMAND`, `FRONTEND_URL`, `E2E_ROOT_SELECTOR`, `E2E_CELL_SELECTOR`, `E2E_HEADING_PATTERN`, `BACKEND_AI_MOVE_FIELD`) as env vars before running `Tests/E2E/Playwright` | Stack-agnostic E2E run |
+| 5.6 | Final end-to-end manual testing | Verified system |
 
 ---
 
@@ -588,20 +694,164 @@ Frontend accessible at `http://localhost:FRONTEND_PUBLIC_PORT`, backend API at `
 
 ## 10. Agent Commands
 
+### Immutable files and folders (applies to every command)
+
+Regardless of which command is issued (`Command: run`, `Command: stop`, or
+any future command), the agent MUST treat the following as **read-only**
+and MUST NOT create, modify, move, rename, or delete them under any
+circumstance:
+
+- `ANALYSIS.md` — this specification document.
+- `Tests/` — the entire tests tree (backend, frontend, E2E). Test code is
+  the authoritative contract; the *implementation* must satisfy the tests,
+  not the other way round.
+- `.gitignore` — the repository's existing ignore rules.
+
+If the agent believes a change to any of these is strictly required to
+proceed, it MUST stop and ask the user explicitly before touching them.
+In particular, generated artefacts (`backend/`, `frontend/`, Dockerfiles,
+`secrets.json`, `secrets.example.json`, `.dockerignore`, `nginx.conf`,
+`docker-compose.yml`, lockfiles, `node_modules/`, build outputs) MUST be
+kept outside these protected paths — either by placing them elsewhere in
+the repo or by ensuring the existing `.gitignore` already covers them.
+
 ### `Command: run`
 
-When the user writes **`Command: run`**, the agent must:
+When the user writes **`Command: run`** (optionally followed by `with <overrides>`), the agent must:
 
-1. Implement the full game **in memory** following this analysis document (Phases 1–5) using the exact technologies defined in the **PLACEHOLDERS** section.
-2. Create all backend and frontend source files, tests, and Docker artifacts.
-3. **Run the full test suite inside Tests folder based on the current stack. All tests MUST pass before proceeding.** The game is not considered ready to use until every test passes successfully.
+1. Implement the full game **in memory** following this analysis document (Phases 1–5) using the exact technologies defined in the **PLACEHOLDERS** section, **except** for any placeholder values overridden by the command (see *Inline overrides* below).
+2. Create all backend and frontend source files, tests, and Docker artifacts. Tag the application root and each of the 9 cell buttons with stable `data-testid` hooks so they satisfy `E2E_ROOT_SELECTOR` and `E2E_CELL_SELECTOR` without per-stack changes to the Playwright suite.
+3. **Run the full test suite inside `Tests/` based on the current stack. All tests MUST pass before proceeding.** This includes:
+   - Backend unit tests under `Tests/Backend/<stack>/`.
+   - Frontend unit tests under `Tests/Frontend/<stack>/`.
+   - **Playwright E2E tests under `Tests/E2E/Playwright/`**, invoked after exporting the *End-to-End (Playwright)* placeholder values as environment variables (`BACKEND_DIR`, `BACKEND_START_COMMAND`, `BACKEND_HEALTH_URL`, `FRONTEND_DIR`, `FRONTEND_START_COMMAND`, `FRONTEND_URL`, `E2E_ROOT_SELECTOR`, `E2E_CELL_SELECTOR`, `E2E_HEADING_PATTERN`, `BACKEND_AI_MOVE_FIELD`). The suite itself MUST NOT be edited when the stack changes.
+   The game is not considered ready to use until every test passes successfully.
 4. Build and run both the backend (via `BACKEND_RUNTIME_SERVER` on `BACKEND_PORT`) and the frontend (via `FRONTEND_DEV_SERVER` on `FRONTEND_DEV_PORT`).
 5. Output **only the artifacts and results** — no code snippets in chat, only confirmation of running services.
+
+#### Inline overrides
+
+The command MAY be followed by `with <tokens>` where `<tokens>` is a free-form,
+case-insensitive, order-independent list separated by `+`, `,`, or whitespace.
+Each token overrides a group of placeholders from §PLACEHOLDERS. **Everything
+not overridden keeps the value defined in §PLACEHOLDERS.**
+
+**Syntax examples** (all equivalent forms are valid):
+
+```
+Command: run with react+mui+aspnetcore
+Command: run with react, mui, aspnetcore
+Command: run with python gpt-4o-mini angular
+Command: run with backend=python frontend=react llm=gpt-4o-mini
+```
+
+**Resolution rules:**
+
+1. Parse each token into a `(category, value)` pair, using either `category=value`
+   syntax or the inference table below when the category is omitted.
+2. For each parsed pair, **overwrite** every placeholder listed in its row.
+   If a token is ambiguous (e.g. a name mapped to more than one category), the
+   agent MUST ask for clarification before proceeding.
+3. Unknown tokens MUST cause the agent to stop and ask for clarification —
+   never silently ignored.
+4. Overrides apply to **frontend, backend, LLM and tests** uniformly: the
+   E2E placeholders (`BACKEND_DIR`, `BACKEND_START_COMMAND`, `FRONTEND_DIR`,
+   `FRONTEND_START_COMMAND`, `E2E_ROOT_SELECTOR`, `BACKEND_AI_MOVE_FIELD`, …)
+   are re-derived from the new backend/frontend values automatically.
+5. **Cascading scope.** A single token overrides *every* concrete choice
+   that logically follows from it — not just the headline placeholder.
+   Specifically, when a token is resolved, the agent MUST apply the change
+   across **all** of the following dimensions:
+
+   - **Source paths & directory layout** — `BACKEND_DIR` / `FRONTEND_DIR`
+     become the stack-matching folders (e.g. `frontend/React`,
+     `backend/AspNetCore`, `frontend/Angular`, `backend/Python`).
+   - **Project/manifest files** — `BACKEND_MANIFEST_FILE`,
+     `FRONTEND_MANIFEST_FILE`, `FRONTEND_BUILD_CONFIG_FILE`, lockfiles, and
+     tool configs match the chosen framework.
+   - **Components & app shell** — every component listed in §4.2.1 (board,
+     cell, game-status, score-board, new-game-button, theme wrapper, API
+     client, state store) is implemented in the chosen `UI_FRAMEWORK` +
+     `UI_LANGUAGE` + `UI_LIBRARY` + `UI_STATE_MANAGER`.
+   - **Backend modules** — `GameEngine`, `AiPlayerService`, controller /
+     router, models, DI / settings wiring, CORS, rate limiting, and
+     `LLM_SDK` integration are implemented in the chosen
+     `BACKEND_LANGUAGE` / `BACKEND_FRAMEWORK`.
+   - **Unit tests** — the agent runs the existing tests under
+     `Tests/Backend/<stack>/` and `Tests/Frontend/<stack>/` that match the
+     chosen stack (e.g. `Tests/Backend/AspNetCore/` + `Tests/Frontend/React/`
+     for `react+aspnetcore`). The **test code itself MUST NOT be modified**
+     to fit the implementation — the implementation must satisfy the
+     existing test contract.
+   - **E2E tests** — the single abstract Playwright suite in
+     `Tests/E2E/Playwright/` runs unchanged, driven by the re-derived
+     env-var values (selectors, start commands, URL, JSON field name).
+   - **Docker & deployment** — `BACKEND_BASE_IMAGE`,
+     `FRONTEND_BUILD_IMAGE`, `FRONTEND_WEB_SERVER_IMAGE`, Dockerfile `CMD`,
+     compose service definitions, and health endpoints follow the chosen
+     stack.
+   - **LLM wiring** — if an `llm` / `llm-provider` token is given,
+     `LLM_MODEL`, `LLM_SDK`, `ENV_LLM_ENDPOINT`, `ENV_LLM_KEY`,
+     `ENV_LLM_MODEL`, and the shape of `secrets.json` are updated; prompt
+     template in §4.1.3 stays identical (the prompt is model-agnostic).
+   - **Infra** — `CONTAINER_RUNTIME`, `CONTAINER_ORCHESTRATOR_LOCAL`,
+     `CONTAINER_ORCHESTRATOR_CLOUD`, `CONTAINER_REGISTRY` follow their own
+     tokens.
+
+   In short: a flag like `react` means "**everything React** — paths,
+   components, unit tests, E2E selectors, build tool, dev server, manifest,
+   config — coherently applied across the whole repo".
+6. After resolution, the agent MUST print the final effective values for every
+   placeholder it changed, so the user can verify the overrides before the
+   build starts.
+
+**Inference table** (token → category → placeholders overridden):
+
+| Token family (examples) | Category | Placeholders overwritten |
+|-------------------------|----------|--------------------------|
+| `react`, `angular`, `vue`, `svelte` | `frontend` | `UI_FRAMEWORK`, `FRONTEND_BUILD_TOOL`, `FRONTEND_DEV_SERVER`, `FRONTEND_HTTP_CLIENT`, `FRONTEND_DIR`, `FRONTEND_START_COMMAND`, `FRONTEND_MANIFEST_FILE`, `FRONTEND_BUILD_CONFIG_FILE`, `E2E_ROOT_SELECTOR` |
+| `mui`, `material`, `chakra`, `antd`, `tailwind`, `bootstrap` | `ui-library` | `UI_LIBRARY` |
+| `zustand`, `redux`, `mobx`, `ngrx`, `pinia` | `ui-state` | `UI_STATE_MANAGER` |
+| `typescript`, `javascript` | `ui-language` | `UI_LANGUAGE` |
+| `aspnetcore`, `dotnet`, `csharp` | `backend` | `BACKEND_LANGUAGE`, `BACKEND_FRAMEWORK`, `BACKEND_RUNTIME_SERVER`, `BACKEND_VALIDATION_LIB`, `BACKEND_SETTINGS_LIB`, `BACKEND_RATE_LIMIT_LIB`, `BACKEND_PACKAGE_MANAGER`, `BACKEND_BASE_IMAGE`, `BACKEND_MANIFEST_FILE`, `BACKEND_DIR`, `BACKEND_START_COMMAND`, `BACKEND_AI_MOVE_FIELD` |
+| `fastapi`, `python`, `flask`, `django` | `backend` | (same row as above, with Python-appropriate values) |
+| `node`, `express`, `nest`, `nestjs` | `backend` | (same row as above, with Node-appropriate values) |
+| `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `claude-3-5-sonnet`, `llama-3` | `llm` | `LLM_MODEL`, `LLM_SDK` (and `ENV_LLM_*` if the provider changes) |
+| `azure-openai`, `openai`, `anthropic`, `bedrock` | `llm-provider` | `LLM_SDK`, `ENV_LLM_ENDPOINT`, `ENV_LLM_KEY`, `ENV_LLM_MODEL` |
+| `docker`, `podman`, `rancher` | `runtime` | `CONTAINER_RUNTIME` |
+| `compose`, `k8s`, `kubernetes` | `orchestrator-local` | `CONTAINER_ORCHESTRATOR_LOCAL` |
+| `aca`, `container-apps`, `aks`, `ecs`, `cloud-run` | `orchestrator-cloud` | `CONTAINER_ORCHESTRATOR_CLOUD` |
+| `port:backend=<n>`, `port:frontend=<n>` | `port` | `BACKEND_PORT` / `FRONTEND_DEV_PORT` (and dependent URLs) |
+
+**Worked example.** `Command: run with react+mui+aspnetcore`
+
+- `react` → frontend overrides: `UI_FRAMEWORK = React`, `FRONTEND_BUILD_TOOL = Vite`,
+  `FRONTEND_DEV_SERVER = Vite dev server`, `FRONTEND_HTTP_CLIENT = fetch`,
+  `FRONTEND_DIR = frontend/React`, `FRONTEND_START_COMMAND = npm run dev`,
+  `FRONTEND_MANIFEST_FILE = package.json`, `FRONTEND_BUILD_CONFIG_FILE = vite.config.ts`,
+  `E2E_ROOT_SELECTOR = #root`.
+- `mui` → `UI_LIBRARY = MUI (Material UI)`.
+- `aspnetcore` → backend overrides: `BACKEND_LANGUAGE = C#`, `BACKEND_FRAMEWORK = ASP.NET Core`,
+  `BACKEND_RUNTIME_SERVER = Kestrel`, `BACKEND_VALIDATION_LIB = DataAnnotations`,
+  `BACKEND_SETTINGS_LIB = Microsoft.Extensions.Configuration`,
+  `BACKEND_RATE_LIMIT_LIB = Microsoft.AspNetCore.RateLimiting`,
+  `BACKEND_PACKAGE_MANAGER = NuGet`, `BACKEND_BASE_IMAGE = mcr.microsoft.com/dotnet/aspnet:9.0`,
+  `BACKEND_MANIFEST_FILE = *.csproj`, `BACKEND_DIR = backend/AspNetCore`,
+  `BACKEND_START_COMMAND = dotnet run --urls http://127.0.0.1:BACKEND_PORT --no-launch-profile`,
+  `BACKEND_AI_MOVE_FIELD = aiMove`.
+- Everything else (LLM, ports, infra) keeps the values from §PLACEHOLDERS.
 
 ### `Command: stop`
 
 When the user writes **`Command: stop`**, the agent must:
 
 1. Stop any running backend and frontend processes.
-2. **Delete all folders** created during the `run` command (`backend/`, `frontend/`, and any root-level generated files such as `docker-compose.yml`, `secrets.json`, `secrets.example.json`, `.gitignore`, `.dockerignore`, `nginx.conf`).
-3. **NEVER delete the `Tests/` folder.** Preserve this `ANALYSIS.md` file and the `Tests/` folder.
+2. **Delete all folders and files** created during the `run` command
+   (typically `backend/`, `frontend/`, and any root-level generated files
+   such as `docker-compose.yml`, `secrets.json`, `secrets.example.json`,
+   `.dockerignore`, `nginx.conf`, plus build/install caches like
+   `node_modules/`, `bin/`, `obj/`, `.venv/`, `dist/`, `build/`).
+3. **NEVER create, modify, move, rename, or delete** `ANALYSIS.md`,
+   `Tests/` (or any file/folder inside it), or `.gitignore`. These are
+   protected per the *Immutable files and folders* rule above. If cleanup
+   would require touching them, the agent MUST stop and ask the user.
